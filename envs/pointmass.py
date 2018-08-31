@@ -3,7 +3,7 @@ from gym import utils
 from gym.envs.mujoco import mujoco_env
 import numpy as np
 
-from IRL.envs.dynamic_mjc.mjc_models import pointmass
+from LRMBMRL.envs.dynamic_mjc.mjc_models import pointmass
 
 class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self, target=np.array([1., 0]), episode_length=20):
@@ -11,6 +11,8 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.max_episode_length = episode_length
         self.target = target
+        self.episode_length = -1
+        self.last_pos = np.array([0., 0., 0.])
 
         model = pointmass(target)
         with model.asfile() as f:
@@ -20,7 +22,7 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         ob = self._get_obs()
-        self.last_pos = self.get_body_com("particle")
+        self.last_pos = self.get_body_com("particle").copy()
 
         self.do_simulation(a, self.frame_skip)
 
@@ -41,15 +43,15 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
     def reset_model(self):
         qpos = self.init_qpos
         qvel = self.init_qvel + self.np_random.uniform(size=self.model.nv, low=-0.1, high=0.1)
-        self.set_state(qpos, qvel)
         self.episode_length = -1
-        self.last_pos = self.get_body_com("particle")
-        self.step([0, 0])
+        self.last_pos = self.get_body_com("particle").copy()
+        self.set_state(qpos, qvel)
+        self.step([0., 0])
         return self._get_obs()
 
     def _get_obs(self):
         return np.concatenate([
-            self.last_pos
+            self.last_pos,
             self.get_body_com("particle"),
             self.get_body_com("target"),
         ])

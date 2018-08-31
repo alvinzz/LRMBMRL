@@ -4,7 +4,7 @@ from gym.envs.mujoco import mujoco_env
 
 from rllab.misc import logger
 
-from IRL.envs.dynamic_mjc.mjc_models import point_mass_maze
+from LRMBMRL.envs.dynamic_mjc.mjc_models import point_mass_maze
 
 
 class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):

@@ -33,7 +33,7 @@ def collect_and_process_rollouts(
             env_timesteps[n] += 1
             if done or env_timesteps[n] >= max_ep_len:
                 # record data
-                obs_vec[n].pop(-1)
+                obs_vec[n].pop()
                 ep_lens.append(len(obs_vec[n]))
                 obs.extend(obs_vec[n])
                 next_obs.extend(next_obs_vec[n])

@@ -51,6 +51,30 @@ def visualize_expert(env_name, expert_dir, expert_name, rl_algo=RL, ep_max_len=2
         time.sleep(1)
     print('avg ep reward:', tot_reward / n_runs)
 
+def train_MBR(
+    save_dir, name, env_name, dataset,
+    repr_algo=ModelLearning, use_checkpoint=False,
+):
+    tf.reset_default_graph()
+    env_fn = lambda: gym.make(env_name)
+    if use_checkpoint:
+        checkpoint = '{}/{}_model'.format(save_dir, name)
+    else:
+        checkpoint = None
+    MBR_model = repr_algo(name, env_fn, dataset, checkpoint=checkpoint)
+
+    print('\nTraining Model-Based Representation...')
+    MBR_model.train()
+
+    MBR_model.saver.save(MBR_model.sess, '{}/{}_model'.format(save_dir, name))
+    return MBR_model
+
 if __name__ == '__main__':
-    train_expert(n_iters=100, save_dir='data/pointmass', name='expert', env_name='PointMass-v0', use_checkpoint=False)
-    visualize_expert('PointMass-v0', 'data/pointmass', 'expert', n_runs=5)
+    # train_expert(n_iters=100, save_dir='data/pointmass', name='expert', env_name='PointMass-v0')
+    # visualize_expert('PointMass-v0', 'data/pointmass', 'expert', n_runs=5)
+
+    # from utils import collect_random_dataset
+    # collect_random_dataset('PointMass-v0')
+
+    dataset = pickle.load(open('PointMass-v0_random_dataset.pkl', 'rb'))
+    train_MBR('data/pointmass', 'mbr_no_reconstr', 'PointMass-v0', dataset)
