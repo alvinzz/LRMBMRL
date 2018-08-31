@@ -1,38 +1,37 @@
 import numpy as np
 from gym import utils
 from gym.envs.mujoco import mujoco_env
+import numpy as np
 
 from IRL.envs.dynamic_mjc.mjc_models import pointmass
 
-# target should be in [0, 1, 2, 3]
 class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self, targets=[0], episode_length=40):
+    def __init__(self, target=np.array([1., 0]), episode_length=20):
         utils.EzPickle.__init__(self)
 
         self.max_episode_length = episode_length
-        self.targets = targets
+        self.target = target
 
-        self.episode_length = 0
-
-        model = pointmass(targets)
+        model = pointmass(target)
         with model.asfile() as f:
             mujoco_env.MujocoEnv.__init__(self, f.name, frame_skip=5)
 
+        self.reset_model()
+
     def step(self, a):
-        target_num = (self.episode_length * len(self.targets)) // self.max_episode_length
-
-        vec_dist = self.get_body_com("particle") - self.get_body_com("target_{}".format(self.targets[target_num]))
-        reward_dist = -np.linalg.norm(vec_dist)**2  # particle to target
-        reward_ctrl = -np.square(a).sum()
-        reward = reward_dist + 0.000 * reward_ctrl
-
-        # targ_v = self.get_body_com("target_{}".format(self.targets[target_num]))
-        # reward = -np.linalg.norm(targ_v - self.sim.data.get_body_xvelp("particle"), ord=1)
+        ob = self._get_obs()
+        self.last_pos = self.get_body_com("particle")
 
         self.do_simulation(a, self.frame_skip)
+
+        vec_dist = self.get_body_com("particle") - self.get_body_com("target")
+        reward_dist = -np.linalg.norm(vec_dist)**2
+        reward_ctrl = -np.square(a).sum()
+        reward = reward_dist + 0.001 * reward_ctrl
+
         self.episode_length += 1
-        ob = self._get_obs()
-        done = self.episode_length >= self.max_episode_length
+        done = (self.episode_length >= self.max_episode_length)
+
         return ob, reward, done, {}
 
     def viewer_setup(self):
@@ -41,17 +40,18 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def reset_model(self):
         qpos = self.init_qpos
-        qvel = self.init_qvel #+ self.np_random.uniform(size=self.model.nv, low=-0.01, high=0.01)
+        qvel = self.init_qvel + self.np_random.uniform(size=self.model.nv, low=-0.1, high=0.1)
         self.set_state(qpos, qvel)
-        self.episode_length = 0
+        self.episode_length = -1
+        self.last_pos = self.get_body_com("particle")
+        self.step([0, 0])
         return self._get_obs()
 
     def _get_obs(self):
-        target_num = (self.episode_length * len(self.targets)) // self.max_episode_length
         return np.concatenate([
+            self.last_pos
             self.get_body_com("particle"),
-            [self.episode_length]
-            # self.get_body_com("target"),
+            self.get_body_com("target"),
         ])
 
     def plot_trajs(self, *args, **kwargs):
