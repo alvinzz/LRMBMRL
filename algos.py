@@ -60,10 +60,12 @@ class ModelLearning:
             config.gpu_options.allow_growth=True
             self.sess = tf.Session(config=config)
 
+            self.obs = tf.placeholder(tf.float32, shape=[None, self.ob_dim], name='obs')
+            self.next_obs = tf.placeholder(tf.float32, shape=[None, self.ob_dim], name='next_obs')
             self.rewards = tf.placeholder(tf.float32, shape=[None, 1], name='rewards')
 
-            self.encoder = GaussianEncoder('encoder', self.ob_dim, self.latent_dim, hidden_dims=[10])
-            self.next_encoder = GaussianEncoder('next_encoder', self.ob_dim, self.latent_dim, hidden_dims=[10])
+            self.encoder = GaussianEncoder('encoder', self.ob_dim, self.latent_dim, self.obs, hidden_dims=[10])
+            self.next_encoder = GaussianEncoder('encoder', self.ob_dim, self.latent_dim, self.next_obs, hidden_dims=[10], reuse_scope=True)
             self.decoder = Decoder('decoder', self.latent_dim, self.ob_dim, self.encoder.zs, hidden_dims=[10])
             self.model = Model('model', self.latent_dim, self.action_dim, self.encoder.zs, hidden_dims=[10, 10])
             self.reward_predictor = RewardPredictor('r_pred', self.latent_dim, self.encoder.zs, hidden_dims=[10, 10])
@@ -97,13 +99,6 @@ class ModelLearning:
                 print('Loss: {}'.format(loss_dict))
 
     def _create_loss(self):
-        # self.distr = self.encoder.distr_encode(self.obs, self.sess)
-        # self.next_distr = self.encoder.distr_encode(self.next_obs, self.sess)
-        # self.zs = self.encoder.sample_encode(self.obs, self.sess)
-        # self.reconstructions = self.decoder.decode(self.zs, self.sess)
-        # self.preds = self.model.predict(self.zs, self.actions, self.sess)
-        # self.r_preds = self.reward_predictor.predict(self.zs, self.sess)
-
         std_normal = DiagGaussian(tf.zeros_like(self.encoder.zs), tf.zeros_like(self.encoder.zs))
 
         self.latent_prior_loss = self.encoder.distribution.kl(std_normal)

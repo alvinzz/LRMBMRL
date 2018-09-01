@@ -12,11 +12,11 @@ class MLP:
         weight_init=tf.contrib.layers.xavier_initializer,
         bias_init=tf.zeros_initializer,
         in_layer=None,
-        reuse=False
+        reuse_scope=False,
     ):
         self.params = {}
         self.layers = {}
-        with tf.variable_scope(name, reuse=reuse):
+        with tf.variable_scope(name, reuse=reuse_scope):
             if in_layer is not None:
                 self.layers['in'] = in_layer
             else:

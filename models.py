@@ -10,7 +10,7 @@ class Model:
         name,
         latent_dim,
         action_dim,
-        zs,
+        in_layer=None,
         out_activation=None,
         hidden_dims=[64, 64, 64],
         hidden_activation=tf.nn.tanh,
@@ -18,8 +18,10 @@ class Model:
         bias_init=tf.zeros_initializer
     ):
         with tf.variable_scope(name):
-            # self.zs = tf.placeholder(tf.float32, shape=[None, latent_dim], name='zs')
-            self.zs = zs
+            if in_layer is None:
+                self.zs = tf.placeholder(tf.float32, shape=[None, latent_dim], name='zs')
+            else:
+                self.zs = in_layer
             self.actions = tf.placeholder(tf.float32, shape=[None, action_dim], name='actions')
             self.za_concat = tf.concat([self.zs, self.actions], axis=1)
 

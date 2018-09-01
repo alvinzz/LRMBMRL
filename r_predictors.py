@@ -9,7 +9,7 @@ class RewardPredictor:
         self,
         name,
         latent_dim,
-        zs,
+        in_layer=None,
         out_activation=None,
         hidden_dims=[64, 64, 64],
         hidden_activation=tf.nn.tanh,
@@ -17,8 +17,10 @@ class RewardPredictor:
         bias_init=tf.zeros_initializer
     ):
         with tf.variable_scope(name):
-            # self.zs = tf.placeholder(tf.float32, shape=[None, latent_dim], name='zs')
-            self.zs = zs
+            if in_layer is None:
+                self.zs = tf.placeholder(tf.float32, shape=[None, latent_dim], name='zs')
+            else:
+                self.zs = in_layer
 
             self.rpred_network = MLP('model', latent_dim, 1, out_activation=out_activation, hidden_dims=hidden_dims, hidden_activation=hidden_activation, weight_init=weight_init, bias_init=bias_init, in_layer=self.zs)
             self.pred_r = self.rpred_network.layers['out']

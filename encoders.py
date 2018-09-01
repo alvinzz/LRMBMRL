@@ -10,14 +10,19 @@ class GaussianEncoder:
         name,
         ob_dim,
         latent_dim,
+        in_layer=None,
         out_activation=None,
         hidden_dims=[64, 64, 64],
         hidden_activation=tf.nn.tanh,
         weight_init=tf.contrib.layers.xavier_initializer,
-        bias_init=tf.zeros_initializer
+        bias_init=tf.zeros_initializer,
+        reuse_scope=False,
     ):
-        with tf.variable_scope(name):
-            self.obs = tf.placeholder(tf.float32, shape=[None, ob_dim], name='obs')
+        with tf.variable_scope(name, reuse=reuse_scope):
+            if in_layer is None:
+                self.obs = tf.placeholder(tf.float32, shape=[None, ob_dim], name='obs')
+            else:
+                self.obs = in_layer
 
             self.mean_network = MLP('means', ob_dim, latent_dim, out_activation=out_activation, hidden_dims=hidden_dims, hidden_activation=hidden_activation, weight_init=weight_init, bias_init=bias_init, in_layer=self.obs)
             self.means = self.mean_network.layers['out']
@@ -34,10 +39,3 @@ class GaussianEncoder:
             feed_dict={self.obs: obs}
         )
         return zs
-
-    def distr_encode(self, obs, global_session):
-        distr = global_session.run(
-            self.distribution,
-            feed_dict={self.obs: obs}
-        )
-        return distr
