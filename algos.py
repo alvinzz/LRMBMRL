@@ -97,6 +97,7 @@ class ModelLearning:
             loss_dict, _ = self.sess.run([self.loss_dict, self.train_op], feed_dict=feed_dict)
             if epoch % 1000 == 0:
                 print('Loss: {}'.format(loss_dict))
+                # print('Loss')
 
     def _create_loss(self):
         std_normal = DiagGaussian(tf.zeros_like(self.encoder.zs), tf.zeros_like(self.encoder.zs))
@@ -117,3 +118,19 @@ class ModelLearning:
                   + 0. * self.reconstr_loss \
                   + 1. * self.model_loss \
                   + 1. * self.r_pred_loss
+
+    def predict_reward(self, obs, action):
+        return self.sess.run(self.reward_predictor.pred_r, feed_dict={self.encoder.obs: obs, self.model.actions: action})
+
+    def MPC_action(self, obs, n_sample_trajs=1000, horizon=5, discount=0.99):
+        env = self.env_fn()
+        obs = np.tile(obs, (n_sample_trajs, 1))
+        zs = self.sess.run(self.encoder.zs, feed_dict={self.encoder.obs: obs})
+        sample_actions = np.reshape([env.action_space.sample() for _ in range(n_sample_trajs*horizon)], (n_sample_trajs, horizon, self.action_dim))
+        rewards = np.zeros((n_sample_trajs, 1))
+        for t in range(horizon):
+            zs = self.sess.run(self.model.pred_z, feed_dict={self.model.actions: sample_actions[:, t], self.model.zs: zs})
+            pred_rewards = self.sess.run(self.reward_predictor.pred_r, feed_dict={self.reward_predictor.zs: zs})
+            rewards += (discount**t * pred_rewards)
+        best_traj_n = np.argmax(np.squeeze(rewards))
+        return sample_actions[best_traj_n, 0]

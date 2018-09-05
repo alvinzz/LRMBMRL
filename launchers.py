@@ -77,4 +77,6 @@ if __name__ == '__main__':
     # collect_random_dataset('PointMass-v0')
 
     dataset = pickle.load(open('PointMass-v0_random_dataset.pkl', 'rb'))
-    train_MBR('data/pointmass', 'mbr_no_reconstr', 'PointMass-v0', dataset)
+    MBR_model = train_MBR('data/pointmass', 'mbr_no_reconstr', 'PointMass-v0', dataset)
+    env = gym.make('PointMass-v0')
+    print(MBR_model.MPC_action(env.reset()))
