@@ -34,8 +34,9 @@ def visualize_expert(env_name, expert_dir, expert_name, rl_algo=RL, ep_max_len=2
     tf.reset_default_graph()
     env_fn = lambda: gym.make(env_name)
     expert_model = rl_algo(expert_name, env_fn, checkpoint='{}/{}_model'.format(expert_dir, expert_name))
-    print('Task latents:')
-    print(expert_model.policy.get_task_latents(expert_model.sess))
+    print('Task latent means:')
+    latents = expert_model.policy.get_task_latents(expert_model.sess)
+    print(latents[:, :latents.shape[1]//2])
     env = gym.make(env_name)
     tot_reward = 0
     for n in range(n_runs):
@@ -54,5 +55,5 @@ def visualize_expert(env_name, expert_dir, expert_name, rl_algo=RL, ep_max_len=2
     print('avg ep reward:', tot_reward / n_runs)
 
 if __name__ == '__main__':
-    train_expert(n_iters=100, save_dir='data/pointmass', name='expert', env_name='PointMass-v0')
+    # train_expert(n_iters=100, save_dir='data/pointmass', name='expert', env_name='PointMass-v0')
     visualize_expert('PointMass-v0', 'data/pointmass', 'expert', n_runs=5)

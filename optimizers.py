@@ -7,7 +7,7 @@ class ClipPPO:
     def __init__(self,
         ob_dim, action_dim, policy,
         clip_param=0.1, max_grad_norm=0.1,
-        optimizer=tf.train.AdamOptimizer, learning_rate=1e-4, optimizer_epsilon=1e-5
+        optimizer=tf.train.AdamOptimizer, learning_rate=1e-3, optimizer_epsilon=1e-5
     ):
         self.optimizer = optimizer(learning_rate=learning_rate, epsilon=optimizer_epsilon)
 
@@ -58,7 +58,7 @@ class ClipPPO:
     def train(self,
         obs, next_obs, actions, action_log_probs, values, value_targets, advantages, task_ids,
         global_session,
-        n_iters=10, batch_size=32
+        n_iters=1, batch_size=32
     ):
         data = [obs, actions, action_log_probs, values, value_targets, advantages, task_ids]
         for iter_ in range(n_iters):
