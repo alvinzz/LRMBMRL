@@ -15,7 +15,7 @@ class RL:
             self.ob_dim = env_fn().observation_space.shape[0]
             self.action_dim = env_fn().action_space.shape[0]
 
-            self.policy = GaussianMLPPolicy('policy', self.ob_dim, self.action_dim, hidden_dims=[64, 64], learn_vars=True)
+            self.policy = GaussianMLPPolicy('policy', self.ob_dim, self.action_dim, hidden_dims=[64, 64, 64], learn_vars=False, hidden_activation=tf.nn.relu)
 
             self.saver = tf.train.Saver()
 

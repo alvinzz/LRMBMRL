@@ -58,9 +58,12 @@ class ClipPPO:
     def train(self,
         obs, next_obs, actions, action_log_probs, values, value_targets, advantages, task_ids,
         global_session,
-        n_iters=1, batch_size=32
+        batch_size=None
     ):
         data = [obs, actions, action_log_probs, values, value_targets, advantages, task_ids]
+        if batch_size is None:
+            batch_size = obs.shape[0]
+        n_iters = 1 + (obs.shape[0]-1) // batch_size
         for iter_ in range(n_iters):
             batched_data = batchify(data, batch_size)
             for minibatch in batched_data:
