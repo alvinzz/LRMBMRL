@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 def train_expert(
     n_iters, save_dir, name, env_name,
-    timesteps_per_rollout=15*50, ep_max_len=50,
+    timesteps_per_rollout=15*10*50, ep_max_len=50,
     rl_algo=RL, use_checkpoint=False
 ):
     tf.reset_default_graph()
@@ -55,5 +55,5 @@ def visualize_expert(env_name, expert_dir, expert_name, rl_algo=RL, ep_max_len=2
     print('avg ep reward:', tot_reward / n_runs)
 
 if __name__ == '__main__':
-    # train_expert(n_iters=100, save_dir='data/pointmass', name='expert', env_name='PointMass-v0')
+    train_expert(n_iters=100, save_dir='data/pointmass', name='expert', env_name='PointMass-v0')
     visualize_expert('PointMass-v0', 'data/pointmass', 'expert', n_runs=5)
