@@ -6,15 +6,17 @@ import numpy as np
 from LRMBMRL.envs.dynamic_mjc.mjc_models import pointmass
 
 class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self, target=np.array([1., 0]), episode_length=20):
+    def __init__(self, tasks, episode_length=50):
         utils.EzPickle.__init__(self)
 
         self.max_episode_length = episode_length
-        self.target = target
+        self.tasks = tasks
+        self.task_id = np.random.randint(0, len(self.tasks))
+        self.target = self.tasks[self.task_id]
         self.episode_length = -1
         self.last_pos = np.array([0., 0., 0.])
 
-        model = pointmass(target)
+        model = pointmass(self.target)
         with model.asfile() as f:
             mujoco_env.MujocoEnv.__init__(self, f.name, frame_skip=5)
 
@@ -43,17 +45,22 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
     def reset_model(self):
         qpos = self.init_qpos
         qvel = self.init_qvel + self.np_random.uniform(size=self.model.nv, low=-0.1, high=0.1)
+        self.task_id = np.random.randint(0, len(self.tasks))
+        self.target = self.tasks[self.task_id]
         self.episode_length = -1
         self.last_pos = self.get_body_com("particle").copy()
+        model = pointmass(self.target)
+        with model.asfile() as f:
+            mujoco_env.MujocoEnv.__init__(self, f.name, frame_skip=5)
         self.set_state(qpos, qvel)
         self.step([0., 0])
         return self._get_obs()
 
     def _get_obs(self):
         return np.concatenate([
-            self.last_pos,
+            # self.last_pos,
             self.get_body_com("particle"),
-            self.get_body_com("target"),
+            # self.get_body_com("target"),
         ])
 
     def plot_trajs(self, *args, **kwargs):

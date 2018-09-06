@@ -2,6 +2,7 @@ import logging
 
 from gym.envs import register
 import numpy as np
+import pickle
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ def register_custom_envs():
             kwargs={'sparse_reward': False, 'direction': 0})
 
     # pointmass
-    register(id='PointMass-v0', entry_point='LRMBMRL.envs.pointmass:PointMass')
+    register(id='PointMass-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': pickle.load(open('envs/pointMassRadGoals/pointMassR01Goals.pkl', 'rb'))[:15]})
 
     # A modified ant which flips over less and learns faster via TRPO
     register(id='CustomAnt-v0', entry_point='LRMBMRL.envs.ant_env:CustomAntEnv',

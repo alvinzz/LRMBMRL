@@ -7,7 +7,7 @@ def collect_and_process_rollouts(
     entropy_weight=0.
 ):
     # collect n_timesteps of data from n_envs rollouts in parallel
-    obs, next_obs, actions, env_rewards = [], [], [], []
+    obs, next_obs, actions, env_rewards, task_ids = [], [], [], [], []
     ep_lens = []
 
     n_envs = int(np.ceil(n_timesteps / max_ep_len))
@@ -17,10 +17,12 @@ def collect_and_process_rollouts(
     next_obs_vec = [[] for n in range(n_envs)]
     actions_vec = [[] for n in range(n_envs)]
     env_rewards_vec = [[] for n in range(n_envs)]
+    task_ids_vec = [[[env_vec[n].task_id]] for n in range(n_envs)]
 
     while len(obs) < n_timesteps:
         cur_obs = np.array([obs[-1] for obs in obs_vec])
-        action_vec = policy.act(cur_obs, global_session)
+        cur_task_ids = np.array([task_id[-1] for task_id in task_ids_vec])
+        action_vec = policy.act(cur_obs, cur_task_ids, global_session)
         for n in range(n_envs):
             action = action_vec[n]
             # threshold actions
@@ -30,26 +32,30 @@ def collect_and_process_rollouts(
             next_obs_vec[n].append(ob)
             actions_vec[n].append(action)
             env_rewards_vec[n].append([env_reward])
+            task_ids_vec[n].append([env_vec[n].task_id])
             env_timesteps[n] += 1
             if done or env_timesteps[n] >= max_ep_len:
                 # record data
                 obs_vec[n].pop()
+                task_ids_vec[n].pop()
                 ep_lens.append(len(obs_vec[n]))
                 obs.extend(obs_vec[n])
                 next_obs.extend(next_obs_vec[n])
                 actions.extend(actions_vec[n])
                 env_rewards.extend(env_rewards_vec[n])
+                task_ids.extend(task_ids_vec[n])
                 # reset env
                 obs_vec[n] = [env_vec[n].reset()]
                 next_obs_vec[n] = []
                 actions_vec[n] = []
                 env_rewards_vec[n] = []
+                task_ids_vec[n] = [[env_vec[n].task_id]]
                 env_timesteps[n] = 0
 
-    obs, next_obs, actions, env_rewards = np.array(obs), np.array(next_obs), np.array(actions), np.array(env_rewards)
+    obs, next_obs, actions, env_rewards, task_ids = np.array(obs), np.array(next_obs), np.array(actions), np.array(env_rewards), np.array(task_ids)
 
     # get action_probs, values, entropies for all timesteps
-    action_log_probs, values, entropies = policy.rollout_data(obs, actions, global_session)
+    action_log_probs, values, entropies = policy.rollout_data(obs, actions, task_ids, global_session)
     action_log_probs, values, entropies = np.expand_dims(action_log_probs, axis=1), np.array(values), np.expand_dims(entropies, axis=1)
 
     # apply reward function
@@ -65,7 +71,7 @@ def collect_and_process_rollouts(
         if ep_len < max_ep_len: # early termination
             last_value = 0
         else: # could still collect more rewards
-            last_value = global_session.run(policy.values, feed_dict={policy.obs: [next_obs[start_ind+ep_len-1]]})[0, 0]
+            last_value = global_session.run(policy.values, feed_dict={policy.obs: [next_obs[start_ind+ep_len-1]], policy.task_ids: [task_ids[start_ind+ep_len-1]]})[0, 0]
         ep_value_targets, ep_advantages = get_value_targets_and_advantages(ep_rewards, ep_values, last_value, discount=discount, gae_lambda=gae_lambda)
         value_targets.extend(ep_value_targets)
         advantages.extend(ep_advantages)
@@ -75,7 +81,7 @@ def collect_and_process_rollouts(
     # can also apply advantage normalization per minibatch
     advantages = (advantages - np.mean(advantages)) / (np.std(advantages) + 1e-8)
 
-    return obs, next_obs, actions, action_log_probs, values, value_targets, advantages, rewards
+    return obs, next_obs, actions, action_log_probs, values, value_targets, advantages, rewards, task_ids
 
 def get_value_targets_and_advantages(
     rewards, values, last_value,

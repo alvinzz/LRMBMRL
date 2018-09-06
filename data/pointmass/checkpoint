@@ -1,2 +1,2 @@
-model_checkpoint_path: "mbr_no_reconstr_model"
-all_model_checkpoint_paths: "mbr_no_reconstr_model"
+model_checkpoint_path: "expert_model"
+all_model_checkpoint_paths: "expert_model"

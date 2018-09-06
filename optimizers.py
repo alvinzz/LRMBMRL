@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from utils import batchify
+from distributions import DiagGaussian
 
 class ClipPPO:
     def __init__(self,
@@ -37,8 +38,15 @@ class ClipPPO:
         # self.surr_value_loss = 0.5 * tf.reduce_mean(tf.maximum(self.value_loss, self.clipped_value_loss))
         self.surr_value_loss = 0.5 * tf.reduce_mean(self.value_loss)
 
+        # KL loss
+        std_normal = DiagGaussian(
+            tf.zeros_like(self.policy.task_latent_distribution.means),
+            tf.zeros_like(self.policy.task_latent_distribution.log_vars)
+        )
+        self.info_loss = tf.reduce_mean(self.policy.task_latent_distribution.kl(std_normal))
+
         # total loss
-        self.loss = self.surr_policy_loss + self.surr_value_loss
+        self.loss = self.surr_policy_loss + self.surr_value_loss + 0.1*self.info_loss
 
         # gradients
         self.params = tf.trainable_variables()
@@ -48,18 +56,18 @@ class ClipPPO:
         self.train_op = self.optimizer.apply_gradients(self.grads)
 
     def train(self,
-        obs, next_obs, actions, action_log_probs, values, value_targets, advantages,
+        obs, next_obs, actions, action_log_probs, values, value_targets, advantages, task_ids,
         global_session,
-        n_iters=10, batch_size=64
+        n_iters=10, batch_size=32
     ):
-        data = [obs, actions, action_log_probs, values, value_targets, advantages]
+        data = [obs, actions, action_log_probs, values, value_targets, advantages, task_ids]
         for iter_ in range(n_iters):
             batched_data = batchify(data, batch_size)
             for minibatch in batched_data:
-                mb_obs, mb_actions, mb_action_log_probs, mb_values, mb_value_targets, mb_advantages = minibatch
+                mb_obs, mb_actions, mb_action_log_probs, mb_values, mb_value_targets, mb_advantages, mb_task_ids = minibatch
                 # normalize advantages here?
                 # mb_advantages = (mb_advantages - np.mean(mb_advantages)) / (np.std(mb_advantages) + 1e-8)
                 global_session.run(
                     self.train_op,
-                    feed_dict={self.obs: mb_obs, self.actions: mb_actions, self.old_action_log_probs: mb_action_log_probs, self.old_values: mb_values, self.value_targets: mb_value_targets, self.advantages: mb_advantages}
+                    feed_dict={self.obs: mb_obs, self.actions: mb_actions, self.old_action_log_probs: mb_action_log_probs, self.old_values: mb_values, self.value_targets: mb_value_targets, self.advantages: mb_advantages, self.policy.task_ids: mb_task_ids}
                 )
