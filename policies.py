@@ -24,7 +24,14 @@ class GaussianMLPPolicy:
         with tf.variable_scope(name):
             self.obs = tf.placeholder(tf.float32, shape=[None, ob_dim], name='obs')
 
-            self.task_latents = tf.get_variable('task_latents', initializer=np.zeros((n_tasks, 2*task_latent_dim), dtype=np.float32))
+            initial_latents = np.concatenate(
+                (
+                    np.random.normal(size=(n_tasks, task_latent_dim)),
+                    -25*np.ones((n_tasks, task_latent_dim))
+                ),
+                axis=1
+            ).astype(np.float32)
+            self.task_latents = tf.get_variable('task_latents', initializer=initial_latents, dtype=np.float32)
             self.task_ids = tf.placeholder(tf.int32, shape=[None, 1], name='task_ids')
             self.task_latent_distribution = DiagGaussian(
                 tf.gather_nd(self.task_latents, self.task_ids)[:, :task_latent_dim],
@@ -33,6 +40,7 @@ class GaussianMLPPolicy:
             self.zs = self.task_latent_distribution.sample()
 
             self.policy_input = tf.concat((self.obs, self.zs), axis=1)
+            self.debug = self.policy_input
 
             # policy net
             self.mean_network = MLP('means', ob_dim+task_latent_dim, action_dim, out_activation=out_activation, hidden_dims=hidden_dims, hidden_activation=hidden_activation, weight_init=weight_init, bias_init=bias_init, in_layer=self.policy_input)
@@ -43,9 +51,9 @@ class GaussianMLPPolicy:
                     self.log_var_network = MLP('log_vars', ob_dim+task_latent_dim, action_dim, out_activation=out_activation, hidden_dims=hidden_dims, hidden_activation=hidden_activation, weight_init=weight_init, bias_init=bias_init, in_layer=self.policy_input)
                     self.log_vars = self.log_var_network.layers['out']
                 else:
-                    self.log_vars = tf.get_variable('log_vars', trainable=True, initializer=-np.ones((1, action_dim), dtype=np.float32))
+                    self.log_vars = tf.get_variable('log_vars', trainable=True, initializer=0*np.ones((1, action_dim), dtype=np.float32))
             else:
-                self.log_vars = tf.get_variable('log_vars', trainable=False, initializer=np.zeros((1, action_dim), dtype=np.float32))
+                self.log_vars = tf.get_variable('log_vars', trainable=False, initializer=0*np.ones((1, action_dim), dtype=np.float32))
 
             self.distribution = DiagGaussian(self.means, self.log_vars)
             self.sampled_actions = self.distribution.sample()
@@ -80,3 +88,10 @@ class GaussianMLPPolicy:
             self.task_latents
         )
         return task_latents
+
+    def get_debug(self, obs, task_ids, global_session):
+        debug = global_session.run(
+            self.debug,
+            feed_dict={self.obs: obs, self.task_ids: task_ids}
+        )
+        return debug

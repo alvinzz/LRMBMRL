@@ -7,7 +7,7 @@ class ClipPPO:
     def __init__(self,
         ob_dim, action_dim, policy,
         clip_param=0.1, max_grad_norm=0.1,
-        optimizer=tf.train.AdamOptimizer, learning_rate=1e-3, optimizer_epsilon=1e-5
+        optimizer=tf.train.AdamOptimizer, learning_rate=0.003, optimizer_epsilon=1e-5
     ):
         self.optimizer = optimizer(learning_rate=learning_rate, epsilon=optimizer_epsilon)
 
@@ -43,10 +43,15 @@ class ClipPPO:
             tf.zeros_like(self.policy.task_latent_distribution.means),
             tf.zeros_like(self.policy.task_latent_distribution.log_vars)
         )
-        self.info_loss = tf.reduce_mean(self.policy.task_latent_distribution.kl(std_normal))
+        self.info_loss = 0.0001*tf.reduce_mean(self.policy.task_latent_distribution.kl(std_normal))
 
         # total loss
-        self.loss = self.surr_policy_loss + self.surr_value_loss + 0.1*self.info_loss
+        self.loss_dict = {
+            'policy': self.surr_policy_loss,
+            'value': self.surr_value_loss,
+            'info': self.info_loss
+        }
+        self.loss = self.surr_policy_loss + self.surr_value_loss + self.info_loss
 
         # gradients
         self.params = tf.trainable_variables()
@@ -58,7 +63,7 @@ class ClipPPO:
     def train(self,
         obs, next_obs, actions, action_log_probs, values, value_targets, advantages, task_ids,
         global_session,
-        batch_size=None
+        batch_size=64,
     ):
         data = [obs, actions, action_log_probs, values, value_targets, advantages, task_ids]
         if batch_size is None:
@@ -70,7 +75,9 @@ class ClipPPO:
                 mb_obs, mb_actions, mb_action_log_probs, mb_values, mb_value_targets, mb_advantages, mb_task_ids = minibatch
                 # normalize advantages here?
                 # mb_advantages = (mb_advantages - np.mean(mb_advantages)) / (np.std(mb_advantages) + 1e-8)
-                global_session.run(
-                    self.train_op,
+                action_prob_ratio, grads, loss_dict, _ = global_session.run(
+                    [self.action_prob_ratio, self.grads, self.loss_dict, self.train_op],
                     feed_dict={self.obs: mb_obs, self.actions: mb_actions, self.old_action_log_probs: mb_action_log_probs, self.old_values: mb_values, self.value_targets: mb_value_targets, self.advantages: mb_advantages, self.policy.task_ids: mb_task_ids}
                 )
+        print(loss_dict)
+        return action_prob_ratio, grads, loss_dict

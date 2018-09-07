@@ -44,7 +44,7 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def reset_model(self):
         qpos = self.init_qpos
-        qvel = self.init_qvel + self.np_random.uniform(size=self.model.nv, low=-0.1, high=0.1)
+        qvel = self.init_qvel #+ self.np_random.uniform(size=self.model.nv, low=-0.1, high=0.1)
         self.task_id = np.random.randint(0, len(self.tasks))
         self.target = self.tasks[self.task_id]
         self.episode_length = -1

@@ -60,7 +60,8 @@ def collect_and_process_rollouts(
 
     # apply reward function
     rewards = env_rewards + entropy_weight * entropies
-    print('avg_ep_reward:', sum(rewards) / len(ep_lens))
+    avg_ep_reward = sum(rewards) / len(ep_lens)
+    print('avg_ep_reward:', avg_ep_reward)
 
     # get value_targets and advantages
     value_targets, advantages = [], []
@@ -81,7 +82,7 @@ def collect_and_process_rollouts(
     # can also apply advantage normalization per minibatch
     advantages = (advantages - np.mean(advantages)) / (np.std(advantages) + 1e-8)
 
-    return obs, next_obs, actions, action_log_probs, values, value_targets, advantages, rewards, task_ids
+    return obs, next_obs, actions, action_log_probs, values, value_targets, advantages, rewards, avg_ep_reward, task_ids
 
 def get_value_targets_and_advantages(
     rewards, values, last_value,

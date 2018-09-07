@@ -23,7 +23,31 @@ def register_custom_envs():
 
     # pointmass
     tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR01Goals.pkl', 'rb'))[:15]
-    register(id='PointMass-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+    register(id='PointMassR01-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR01Goals.pkl', 'rb'))[-5:]
+    register(id='PointMassR01_test-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR02Goals.pkl', 'rb'))[:15]
+    register(id='PointMassR02-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR02Goals.pkl', 'rb'))[-5:]
+    register(id='PointMassR02_test-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR03Goals.pkl', 'rb'))[:15]
+    register(id='PointMassR03-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR03Goals.pkl', 'rb'))[-5:]
+    register(id='PointMassR03_test-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR12Goals.pkl', 'rb'))[:15]
+    register(id='PointMassR12-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR23Goals.pkl', 'rb'))[:15]
+    register(id='PointMassR23-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
+            kwargs={'tasks': tasks})
+    tasks = pickle.load(open('envs/pointMassRadGoals/pointMassR34Goals.pkl', 'rb'))[:15]
+    register(id='PointMassR34-v0', entry_point='LRMBMRL.envs.pointmass:PointMass',
             kwargs={'tasks': tasks})
 
     # A modified ant which flips over less and learns faster via TRPO

@@ -1,2 +1,2 @@
-model_checkpoint_path: "expert_model"
-all_model_checkpoint_paths: "expert_model"
+model_checkpoint_path: "R01_model"
+all_model_checkpoint_paths: "R01_model"

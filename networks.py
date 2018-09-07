@@ -42,4 +42,7 @@ class MLP:
             else:
                 self.params['W0'] = tf.get_variable('W0', [in_dim, out_dim], initializer=weight_init())
                 self.params['b0'] = tf.get_variable('b0', [out_dim], initializer=bias_init())
-                self.layers['out'] = hidden_activation(tf.matmul(self.layers['in'], self.params['W0']) + self.params['b0'])
+                if out_activation is None:
+                    self.layers['out'] = tf.matmul(self.layers['in'], self.params['W0']) + self.params['b0']
+                else:
+                    self.layers['out'] = out_activation(tf.matmul(self.layers['in'], self.params['W0']) + self.params['b0'])
