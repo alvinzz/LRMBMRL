@@ -12,7 +12,6 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
         self.max_episode_length = episode_length
         self.target = target
         self.episode_length = -1
-        self.last_pos = np.array([0., 0., 0.])
 
         model = pointmass(target)
         with model.asfile() as f:
@@ -22,7 +21,6 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         ob = self._get_obs()
-        self.last_pos = self.get_body_com("particle").copy()
 
         self.do_simulation(a, self.frame_skip)
 
@@ -44,14 +42,12 @@ class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
         qpos = self.init_qpos
         qvel = self.init_qvel + self.np_random.uniform(size=self.model.nv, low=-0.1, high=0.1)
         self.episode_length = -1
-        self.last_pos = self.get_body_com("particle").copy()
         self.set_state(qpos, qvel)
         self.step([0., 0])
         return self._get_obs()
 
     def _get_obs(self):
         return np.concatenate([
-            self.last_pos,
             self.get_body_com("particle"),
             self.get_body_com("target"),
         ])
