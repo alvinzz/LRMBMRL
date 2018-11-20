@@ -32,7 +32,7 @@ class MILOptimizer:
         self.surr_policy_loss = tf.reduce_mean(tf.maximum(self.policy_loss, self.clipped_policy_loss))
         self.inner_loss = self.surr_policy_loss
         self.inner_grads, self.zipped_inner_grads, self.postupdate_params = self.collect_grads(
-            self.params, self.inner_loss, max_grad_norm, inner_learning_rate
+            self.params, self.inner_loss, max_grad_norm, inner_learning_rate, noupdate_keys=['conv_network'],
         )
         self.inner_update_op = tf.train.GradientDescentOptimizer(inner_learning_rate).apply_gradients(self.zipped_inner_grads)
 
@@ -99,7 +99,7 @@ class MILOptimizer:
             }
         )
 
-    def collect_grads(self, params, loss, max_grad_norm=0.1, learning_rate=0.1):
+    def collect_grads(self, params, loss, max_grad_norm=0.1, learning_rate=0.1, noupdate_keys=['conv_network']):
         grads, zipped_grads, postupdate_params = {}, [], {}
         for (k, v) in params.items():
             if type(v) != dict: # is tf variable reference
@@ -108,6 +108,8 @@ class MILOptimizer:
                     max_grad_norm,
                 )
                 grads[k] = grads[k][0]
+                if k in noupdate_keys:
+                    grads[k] = tf.zeros_like(grads[k])
                 postupdate_params[k] = params[k] - learning_rate*grads[k]
                 zipped_grads.append((grads[k], params[k]))
             else:

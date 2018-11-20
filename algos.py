@@ -1,4 +1,4 @@
-from policies import GaussianMLPPolicy
+from policies import GaussianMLPPolicy, ConvGaussianMLPPolicy
 import tensorflow as tf
 import numpy as np
 from rollouts import *
@@ -21,7 +21,8 @@ class MetaRL:
 
             self.expert_trajs = expert_trajs
 
-            self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[64], learn_vars=True)
+            # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[64], learn_vars=True)
+            self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim+64*64*3, self.action_dim, learn_vars=True)
 
             self.saver = tf.train.Saver()
 
@@ -33,7 +34,7 @@ class MetaRL:
             if checkpoint:
                 self.saver.restore(self.sess, checkpoint)
 
-    def train(self, n_iters, expert_trajs, batch_timesteps=10000, max_ep_len=500):
+    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500):
         for iter_ in range(n_iters):
             print('______________')
             print('Iteration', iter_)
@@ -44,7 +45,7 @@ class MetaRL:
                     = collect_and_process_rollouts(self.env_fns[task], self.policy, self.sess, batch_timesteps, max_ep_len)
             self.policy.optimizer.train(obs, next_obs, actions, action_log_probs, returns, self.sess)
 
-    def test_update(self, expert_trajs, batch_timesteps=10000, max_ep_len=500):
+    def test_update(self, batch_timesteps=10000, max_ep_len=500):
         assert len(self.env_fns) == 1, 'should test on one task at a time'
         env_fn = list(self.env_fns.values())[0]
         obs, next_obs, actions, action_log_probs, baselines, returns, rewards \
