@@ -7,7 +7,7 @@ class MILOptimizer:
         ob_dim, action_dim, policy, expert_trajs,
         clip_param=0.1, max_grad_norm=0.1, min_log_var=-2,
         optimizer=tf.train.AdamOptimizer, learning_rate=0.01, optimizer_epsilon=1e-5,
-        inner_learning_rate=1.0,
+        inner_learning_rate=0.1,
     ):
         self.expert_trajs = expert_trajs
         self.optimizer = optimizer(learning_rate=learning_rate, epsilon=optimizer_epsilon)
@@ -65,8 +65,8 @@ class MILOptimizer:
                     self.actions: mb_actions,
                     self.old_action_log_probs: mb_action_log_probs,
                     self.returns: mb_returns,
-                    self.expert_obs: self.expert_trajs[task]['obs'],
-                    self.expert_actions: self.expert_trajs[task]['actions'],
+                    self.expert_obs: self.expert_trajs[task]['obs'][:1200],
+                    self.expert_actions: self.expert_trajs[task]['actions'][:1200],
                 }
             )
             if i == 0:

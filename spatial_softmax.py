@@ -32,7 +32,7 @@ DATA_FORMAT_NCDHW = 'NCDHW'
 DATA_FORMAT_NDHWC = 'NDHWC'
 
 def spatial_softmax(features,
-                    temperature=None,
+                    temperature=1.0,
                     name=None,
                     variables_collections=None,
                     trainable=True,

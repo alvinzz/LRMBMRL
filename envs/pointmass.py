@@ -3,7 +3,7 @@ from gym import utils
 from gym.envs.mujoco import mujoco_env
 import numpy as np
 
-from LRMBMRL.envs.dynamic_mjc.mjc_models import pointmass
+from envs.dynamic_mjc.mjc_models import pointmass
 
 class PointMass(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self, target=np.array([1., 0]), episode_length=20):

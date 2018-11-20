@@ -7,6 +7,7 @@ import pickle
 from envs import *
 register_custom_envs()
 from envs.pointmass import PointMass
+from envs.r7dof import R7DOFEnv
 import time
 import matplotlib
 matplotlib.use('TkAgg')
@@ -24,12 +25,11 @@ def train_mil(
         checkpoint = '{}/{}_model'.format(save_dir, name)
     else:
         checkpoint = None
-    expert_model = metarl_algo(name, env_fns, expert_trajs, checkpoint=checkpoint)
+    expert_model = metarl_algo(name, env_fns, expert_trajs, checkpoint=checkpoint, save_path='{}/{}_model'.format(save_dir, name))
 
     print('\nTraining expert...')
     expert_model.train(n_iters, timesteps_per_rollout, ep_max_len)
 
-    expert_model.saver.save(expert_model.sess, '{}/{}_model'.format(save_dir, name))
     return expert_model
 
 def test_mil(expert_dir, expert_name,
@@ -55,14 +55,30 @@ def test_mil(expert_dir, expert_name,
                 obs, reward, done, info = env.step(action)
                 tot_reward += reward
                 t += 1
+            try:
+                env.close()
+            except Exception as e:
+                pass
             time.sleep(1)
         print('avg ep reward:', tot_reward / n_test_rollouts)
 
 if __name__ == '__main__':
-    train_expert_trajs = pickle.load(open('data/pointmass/train_expert_trajs.pkl', 'rb'))
-    train_envs = {k: PointMass(np.array(k)) for (k, v) in train_expert_trajs.items()}
-    train_mil(n_iters=100, save_dir='data/pointmass', name='MIL', envs=train_envs, expert_trajs=train_expert_trajs)
+    expert_trajs = pickle.load(open('data/r7dof/expert_trajs.pkl', 'rb'))
+    envs = {k: R7DOFEnv(k) for (k, v) in expert_trajs.items()}
+    train_mil(n_iters=5000, save_dir='data/r7dof', name='vision_MIL', envs=envs, expert_trajs=expert_trajs, timesteps_per_rollout=600, ep_max_len=30)
+    test_mil(expert_dir='data/r7dof', expert_name='vision_MIL', envs=envs, timesteps_per_rollout=600, ep_max_len=30)
 
-    test_expert_trajs = pickle.load(open('data/pointmass/test_expert_trajs.pkl', 'rb'))
-    test_envs = {k: PointMass(np.array(k)) for (k, v) in test_expert_trajs.items()}
-    test_mil(expert_dir='data/pointmass', expert_name='MIL', envs=test_envs)
+    ### VISION BC
+    #expert_trajs = pickle.load(open('data/r7dof/expert_trajs_test.pkl', 'rb'))
+    #envs = {k: R7DOFEnv(k) for (k, v) in expert_trajs.items()}
+    #train_mil(n_iters=5000, save_dir='data/r7dof', name='vision_BC_test', envs=envs, expert_trajs=expert_trajs, timesteps_per_rollout=1, ep_max_len=1)
+    #test_mil(expert_dir='data/r7dof', expert_name='vision_BC_test', envs=envs, timesteps_per_rollout=30, ep_max_len=30)
+
+    ### POINTMASS
+    #train_expert_trajs = pickle.load(open('data/pointmass/train_expert_trajs.pkl', 'rb'))
+    #train_envs = {k: PointMass(np.array(k)) for (k, v) in train_expert_trajs.items()}
+    #train_mil(n_iters=100, save_dir='data/pointmass', name='MIL', envs=train_envs, expert_trajs=train_expert_trajs)
+
+    #test_expert_trajs = pickle.load(open('data/pointmass/test_expert_trajs.pkl', 'rb'))
+    #test_envs = {k: PointMass(np.array(k)) for (k, v) in test_expert_trajs.items()}
+    #test_mil(expert_dir='data/pointmass', expert_name='MIL', envs=test_envs)

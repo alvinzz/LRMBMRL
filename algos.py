@@ -10,7 +10,8 @@ class MetaRL:
         name,
         env_fns,
         expert_trajs,
-        checkpoint=None
+        checkpoint=None,
+        save_path='model',
     ):
         with tf.variable_scope(name):
             self.env_fns = env_fns
@@ -22,9 +23,10 @@ class MetaRL:
             self.expert_trajs = expert_trajs
 
             # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[64], learn_vars=True)
-            self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim+64*64*3, self.action_dim, learn_vars=True)
+            self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, learn_vars=True)
 
             self.saver = tf.train.Saver()
+            self.save_path = save_path
 
             config = tf.ConfigProto()
             config.gpu_options.allow_growth=True
@@ -34,7 +36,7 @@ class MetaRL:
             if checkpoint:
                 self.saver.restore(self.sess, checkpoint)
 
-    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500):
+    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500, inv_save_freq=250):
         for iter_ in range(n_iters):
             print('______________')
             print('Iteration', iter_)
@@ -44,6 +46,9 @@ class MetaRL:
                 baselines[task], returns[task], rewards[task] \
                     = collect_and_process_rollouts(self.env_fns[task], self.policy, self.sess, batch_timesteps, max_ep_len)
             self.policy.optimizer.train(obs, next_obs, actions, action_log_probs, returns, self.sess)
+            if iter_ % inv_save_freq == 0:
+                self.saver.save(self.sess, save_path)
+        self.saver.save(self.sess, save_path)
 
     def test_update(self, batch_timesteps=10000, max_ep_len=500):
         assert len(self.env_fns) == 1, 'should test on one task at a time'

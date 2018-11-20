@@ -20,32 +20,23 @@ class R7DOFEnv(MujocoEnv):
         self.frame_skip = frame_skip
         MujocoEnv.__init__(self, xml_file, self.frame_skip)
         # set properties
-        self.obs_dim = self.get_current_image_obs()[1].size
+        self.reset()
+        self.obs_dim = self.get_obs().size
         bounds = self.model.actuator_ctrlrange.copy()
         low = bounds[:, 0]
         high = bounds[:, 1]
         self.action_space = spaces.Box(low=low, high=high)
-        low = -np.inf * np.ones(self.obs_dim)
-        high = np.inf * np.ones(self.obs_dim)
+        low = -256 * np.ones(self.obs_dim)
+        high = 255 * np.ones(self.obs_dim)
         self.observation_space = spaces.Box(low=low, high=high)
-
-        self.im_num = 0
-        self.window_name = 'dummy_r7dof_oracle'
-
-    def get_current_image_obs(self):
-        image = self.sim.render(self.imsize, self.imsize, camera_name='maincam')
-        image = image[:, ::-1, [2,1,0]]
-        image = image.astype(np.float32)
-        state = self._get_obs()
-        return image, state
 
     def step(self, action):
         distance = np.linalg.norm(self.get_body_com("tips_arm") - self.get_body_com("goal"))
         reward = - distance
         self.do_simulation(action, self.frame_skip)
-        next_img, next_obs = self.get_current_image_obs()
+        next_obs = self.get_obs()
         done = False
-        return next_obs, reward, done, {'img': next_img}
+        return next_obs, reward, done, None
 
     def sample_goals(self, num_goals):
         return np.zeros(num_goals)
@@ -57,8 +48,10 @@ class R7DOFEnv(MujocoEnv):
         qpos = np.copy(self.init_qpos)
         qvel = np.copy(self.init_qvel) + 0.0*self.np_random.uniform(low=-0.005, high=0.005, size=self.model.nv)
         while True:
-            #self.goal = np.random.uniform(low=[-0.4, -0.4, -0.3], high=[0.4, 0.0, -0.3])
-            self.goal = reset_args
+            if reset_args is not None:
+                self.goal = reset_args
+            else:
+                self.goal = np.random.uniform(low=[-0.4, -0.4, -0.3], high=[0.4, 0.0, -0.3])
             self.distract1 = np.random.uniform(low=[-0.4,-0.4,-0.3],high=[0.4,0.0,-0.3])
             self.distract2 = np.random.uniform(low=[-0.4,-0.4,-0.3],high=[0.4,0.0,-0.3])
             if np.linalg.norm(self.goal-self.distract1)>0.35 \
@@ -70,30 +63,32 @@ class R7DOFEnv(MujocoEnv):
         qpos[-7:-4] = self.goal
         qvel[-7:] = 0
         self.set_state(qpos, qvel)
-        return self.get_current_image_obs()[1]
+        return self.get_obs()
 
-    def _get_obs(self):
-        return np.concatenate([
+    def get_aux_state(self):
+        aux_state = np.concatenate([
             self.data.qpos.flat[:7],
             self.data.qvel.flat[:7],
             self.get_body_com("tips_arm"),
-            #self.get_body_com('goal'),
         ])
+        return aux_state
 
-    def clip_goal_from_obs(self, paths):
-        clip_dim = self.get_body_com('goal').shape[0]
-        for path in paths:
-            images = path['env_infos']['img']
-            obs = path['observations'][:, :-clip_dim]
-            #obs = path['observations']
-            images = np.reshape(images, [-1, self.imsize*self.imsize*3])
-            #path['observations'] = np.concatenate((obs, images), axis=-1)
-            path['observations'] = np.concatenate((images, obs), axis=-1)
-            del path['env_infos']
-        return paths
+    def get_image(self):
+        image = self.sim.render(self.imsize, self.imsize, camera_name='maincam')
+        image = image[:, ::-1, [2,1,0]]
+        image = image.astype(np.float32)
+        return image
+
+    def get_obs(self):
+        image = self.get_image()
+        aux_state = self.get_aux_state()
+        obs = np.concatenate((image.flatten(), aux_state))
+        return obs
 
     def render(self):
-        pass
+        image = self.get_image().astype(np.uint8)
+        cv2.imshow('r7dof_env', image)
+        cv2.waitKey(1)
 
-    def log_diagnostics(self, paths=[], prefix=''):
-        pass
+    def close(self):
+        cv2.destroyAllWindows()
