@@ -33,7 +33,10 @@ class MLP:
                 self.params['W0'] = tf.get_variable('W0', [in_dim, out_dim], initializer=weight_init())
                 self.params['b0'] = tf.get_variable('b0', [out_dim], initializer=bias_init())
 
-    def forward(self, in_tensor):
+    def forward(self, in_tensor, params=None):
+        if params is not None:
+            orig_params = self.params
+            self.params = params
         layers = {}
         layers['in'] = in_tensor
         if self.hidden_dims:
@@ -61,4 +64,6 @@ class MLP:
                     tf.matmul(layers['in'], self.params['W0'])
                     + self.params['b0']
                 )
+        if params is not None:
+            self.params = orig_params
         return layers

@@ -36,6 +36,7 @@ class GaussianMLPPolicy:
             else:
                 self.log_vars = tf.get_variable('log_vars', trainable=False, initializer=np.zeros((1, action_dim), dtype=np.float32))
 
+            self.distribution_class = DiagGaussian
             self.distribution = DiagGaussian(self.means, self.log_vars)
             self.sampled_actions = self.distribution.sample()
 
@@ -49,7 +50,8 @@ class GaussianMLPPolicy:
             # self.baselines = self.baseline_network.forward(self.obs)['out']
             self.baselines = tf.get_variable('baseline', trainable=True, initializer=np.zeros((1, 1), dtype=np.float32))
 
-            # training, MIL
+            # collect parameters + optimize
+            self.collect_params()
             self.optimizer = optimizer(ob_dim, action_dim, self, expert_trajs)
 
     def act(self, obs, global_session):
@@ -65,3 +67,52 @@ class GaussianMLPPolicy:
             feed_dict={self.obs: obs, self.actions: actions}
         )
         return action_log_probs, baselines, entropies
+
+    def collect_params(self):
+        self.params = {}
+        # mean
+        self.params['mean_network'] = {}
+        for (k, v) in self.mean_network.params.items():
+            self.params['mean_network'][k] = v
+        # baseline
+        if hasattr(self, 'baseline_network'):
+            self.params['baseline_network'] = {}
+            for (k, v) in self.baseline_network.params.items():
+                self.params['baseline_network'][k] = v
+        elif self.baselines.trainable:
+            self.params['baseline'] = self.baselines
+        # log var
+        if hasattr(self, 'log_var_network'):
+            self.params['log_var_network'] = {}
+            for (k, v) in self.log_var_network.params.items():
+                self.params['log_var_network'][k] = v
+        elif self.log_vars.trainable:
+            self.params['log_var'] = self.log_vars
+        # conv
+        if hasattr(self, 'conv_network'):
+            self.params['conv_network'] = {}
+            for (k, v) in self.conv_network.params.items():
+                self.params['conv_network'][k] = v
+
+    def forward(self, input_tensor, params):
+        if hasattr(self, 'conv_network'):
+            state = self.conv_network.forward(
+                input_tensor,
+                params=params['conv_network']
+            )['out']
+        else:
+            state = input_tensor
+        means = self.mean_network.forward(
+            state,
+            params=params['mean_network']
+        )['out']
+        if hasattr(self, 'log_var_network'):
+            log_vars = self.log_var_network.forward(
+                state,
+                params=params['log_var_network']
+            )['out']
+        elif self.log_vars.trainable:
+            log_vars = params['log_var']
+        else:
+            log_vars = self.log_vars
+        return means, log_vars
