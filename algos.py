@@ -36,19 +36,26 @@ class MetaRL:
             if checkpoint:
                 self.saver.restore(self.sess, checkpoint)
 
-    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500, inv_save_freq=250):
+    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500, inv_save_freq=250, inv_rollout_freq=50):
         for iter_ in range(n_iters):
             print('______________')
             print('Iteration', iter_)
-            obs, next_obs, actions, action_log_probs, baselines, returns, rewards = {}, {}, {}, {}, {}, {}, {}
-            for task in self.env_fns.keys():
-                obs[task], next_obs[task], actions[task], action_log_probs[task], \
-                baselines[task], returns[task], rewards[task] \
-                    = collect_and_process_rollouts(self.env_fns[task], self.policy, self.sess, batch_timesteps, max_ep_len)
+            if iter_ % inv_rollout_freq == 0:
+                # collect new, on-policy rollout
+                obs, next_obs, actions, action_log_probs, baselines, returns, rewards = {}, {}, {}, {}, {}, {}, {}
+                for task in self.env_fns.keys():
+                    obs[task], next_obs[task], actions[task], action_log_probs[task], \
+                    baselines[task], returns[task], rewards[task] \
+                        = collect_and_process_rollouts(self.env_fns[task], self.policy, self.sess, batch_timesteps, max_ep_len)
+            else:
+                # update action_log_probs and baselines to reflect updated policy
+                for task in self.env_fns.keys():
+                    action_log_probs[task], baselines[task], _ = self.policy.rollout_data(obs[task], actions[task], self.sess)
+                    action_log_probs[task], baselines[task] = action_log_probs[task].reshape(-1, 1), baselines[task].reshape(-1, 1)
             self.policy.optimizer.train(obs, next_obs, actions, action_log_probs, returns, self.sess)
             if iter_ % inv_save_freq == 0:
-                self.saver.save(self.sess, save_path)
-        self.saver.save(self.sess, save_path)
+                self.saver.save(self.sess, self.save_path)
+        self.saver.save(self.sess, self.save_path)
 
     def test_update(self, batch_timesteps=10000, max_ep_len=500):
         assert len(self.env_fns) == 1, 'should test on one task at a time'

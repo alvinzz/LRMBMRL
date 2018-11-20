@@ -28,7 +28,7 @@ def train_mil(
     expert_model = metarl_algo(name, env_fns, expert_trajs, checkpoint=checkpoint, save_path='{}/{}_model'.format(save_dir, name))
 
     print('\nTraining expert...')
-    expert_model.train(n_iters, timesteps_per_rollout, ep_max_len)
+    expert_model.train(n_iters, timesteps_per_rollout, ep_max_len, inv_save_freq=5, inv_rollout_freq=5)
 
     return expert_model
 
@@ -63,6 +63,7 @@ def test_mil(expert_dir, expert_name,
         print('avg ep reward:', tot_reward / n_test_rollouts)
 
 if __name__ == '__main__':
+    ### VISION MIL
     expert_trajs = pickle.load(open('data/r7dof/expert_trajs.pkl', 'rb'))
     envs = {k: R7DOFEnv(k) for (k, v) in expert_trajs.items()}
     train_mil(n_iters=5000, save_dir='data/r7dof', name='vision_MIL', envs=envs, expert_trajs=expert_trajs, timesteps_per_rollout=600, ep_max_len=30)
