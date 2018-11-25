@@ -16,12 +16,12 @@ class MetaParallelEnvExecutor(object):
     """
 
     def __init__(self, env_fns, envs_per_task, max_path_length):
-        self.n_envs = meta_batch_size * envs_per_task
         self.env_fns = env_fns
         self.meta_batch_size = len(env_fns)
+        self.n_envs = self.meta_batch_size * envs_per_task
         self.envs_per_task = envs_per_task
-        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(meta_batch_size)])
-        seeds = np.random.choice(range(10**6), size=meta_batch_size, replace=False)
+        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(self.meta_batch_size)])
+        seeds = np.random.choice(range(10**6), size=self.meta_batch_size, replace=False)
 
         self.ps = [
             Process(target=worker, args=(work_remote, remote, env_fn, envs_per_task, max_path_length, seed))
@@ -126,3 +126,19 @@ def worker(remote, parent_remote, env_fn, n_envs, max_path_length, seed):
 
         else:
             raise NotImplementedError
+
+if __name__ == '__main__':
+    from envs.r7dof import R7DOFEnv
+    env_fns = [lambda: R7DOFEnv(i//20) for i in range(60)]
+    envs_per_task = 1
+    max_path_length = 30
+    sampler = MetaParallelEnvExecutor(env_fns, envs_per_task, max_path_length)
+    targets = np.random.uniform(low=[-0.4,-0.4,-0.3], high=[0.4,0,-0.3], size=(60, 3))
+    import time
+    start = time.time()
+    obs = sampler.reset(targets)
+    for t in range(30):
+        sampled_actions = np.random.uniform(low=-np.ones(7), high=np.ones(7), size=(60, 7))
+        obs, rewards, dones, infos = sampler.step(sampled_actions)
+    end = time.time()
+    print(end-start)
