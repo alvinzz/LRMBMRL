@@ -9,23 +9,23 @@ class MetaParallelEnvExecutor(object):
     in a vectorized manner. Thereby the environments are distributed among meta_batch_size processes and
     executed in parallel.
     Args:
-        env (meta_policy_search.envs.base.MetaEnv): meta environment object
-        meta_batch_size (int): number of meta tasks
+        env_fns: meta-environments
         envs_per_task (int): number of environments per meta task
         max_path_length (int): maximum length of sampled environment paths - if the max_path_length is reached,
                              the respective environment is reset
     """
 
-    def __init__(self, env, meta_batch_size, envs_per_task, max_path_length):
+    def __init__(self, env_fns, envs_per_task, max_path_length):
         self.n_envs = meta_batch_size * envs_per_task
-        self.meta_batch_size = meta_batch_size
+        self.env_fns = env_fns
+        self.meta_batch_size = len(env_fns)
         self.envs_per_task = envs_per_task
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(meta_batch_size)])
         seeds = np.random.choice(range(10**6), size=meta_batch_size, replace=False)
 
         self.ps = [
-            Process(target=worker, args=(work_remote, remote, pickle.dumps(env), envs_per_task, max_path_length, seed))
-            for (work_remote, remote, seed) in zip(self.work_remotes, self.remotes, seeds)]  # Why pass work remotes?
+            Process(target=worker, args=(work_remote, remote, env_fn, envs_per_task, max_path_length, seed))
+            for (work_remote, remote, env_fn, seed) in zip(self.work_remotes, self.remotes, self.env_fns, seeds)]  # Why pass work remotes?
 
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things to hang
@@ -78,7 +78,7 @@ class MetaParallelEnvExecutor(object):
         return self.n_envs
 
 
-def worker(remote, parent_remote, env_pickle, n_envs, max_path_length, seed):
+def worker(remote, parent_remote, env_fn, n_envs, max_path_length, seed):
     """
     Instantiation of a parallel worker for collecting samples. It loops continually checking the task that the remote
     sends to it.
@@ -92,7 +92,7 @@ def worker(remote, parent_remote, env_pickle, n_envs, max_path_length, seed):
     """
     parent_remote.close()
 
-    envs = [pickle.loads(env_pickle) for _ in range(n_envs)]
+    envs = [env_fn() for _ in range(n_envs)]
     np.random.seed(seed)
 
     ts = np.zeros(n_envs, dtype='int')

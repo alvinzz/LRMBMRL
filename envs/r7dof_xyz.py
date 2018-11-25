@@ -18,6 +18,7 @@ class R7DOFEnv(MujocoEnv):
             xml_file = '/home/ubuntu/LRMBMRL/envs/assets/reacher_7dof_xyz_2distr_%s%s%s.xml'%tuple(self.shuffle_order)
 
         self.frame_skip = frame_skip
+        self.goal = np.array([0, 0, 0])
         MujocoEnv.__init__(self, xml_file, self.frame_skip)
         # set properties
         self.reset()
@@ -38,7 +39,7 @@ class R7DOFEnv(MujocoEnv):
         #self.do_simulation(action, self.frame_skip)
         next_obs = self.get_obs()
         done = False
-        return next_obs, reward, done, None
+        return next_obs, reward, done, {'target': self.goal}
 
     def sample_goals(self, num_goals):
         return np.zeros(num_goals)
@@ -71,7 +72,7 @@ class R7DOFEnv(MujocoEnv):
         aux_state = np.concatenate([
             self.data.qpos.flat[:7],
             self.data.qvel.flat[:7],
-            self.get_body_com("tips_arm"),
+            self.get_body_com('end_eff'),
         ])
         return aux_state
 
