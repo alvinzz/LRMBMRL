@@ -91,7 +91,7 @@
         </body>
     </worldbody>
 	<asset >
-		<texture type="2d" name="table" file="/home/alvin/maml_rl/vendor/mujoco/textures/table_textures/wpic_002.png"/>
+		<texture type="2d" name="table" file="/home/ubuntu/LRMBMRL/envs/assets/table_texture.png"/>
 		<material name="table" shininess="0.3" rgba="0.9 0.9 0.9 1" texture="table" specular="1"/>
 	</asset>
     <actuator>

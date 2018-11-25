@@ -22,10 +22,10 @@ class MetaRL:
 
             self.expert_trajs = expert_trajs
 
-            # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[64], learn_vars=True)
+            # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[100, 100, 100], learn_vars=True)
             self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, learn_vars=True)
 
-            self.saver = tf.train.Saver()
+            self.saver = tf.train.Saver(max_to_keep=None)
             self.save_path = save_path
 
             config = tf.ConfigProto()
@@ -36,7 +36,7 @@ class MetaRL:
             if checkpoint:
                 self.saver.restore(self.sess, checkpoint)
 
-    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500, inv_save_freq=250, inv_rollout_freq=50):
+    def train(self, n_iters, batch_timesteps=10000, max_ep_len=500, inv_save_freq=10, inv_rollout_freq=1):
         for iter_ in range(n_iters):
             print('______________')
             print('Iteration', iter_)
@@ -54,8 +54,8 @@ class MetaRL:
                     action_log_probs[task], baselines[task] = action_log_probs[task].reshape(-1, 1), baselines[task].reshape(-1, 1)
             self.policy.optimizer.train(obs, next_obs, actions, action_log_probs, returns, self.sess)
             if iter_ % inv_save_freq == 0:
-                self.saver.save(self.sess, self.save_path)
-        self.saver.save(self.sess, self.save_path)
+                self.saver.save(self.sess, '{}_{}'.format(self.save_path, iter_))
+        self.saver.save(self.sess, '{}_{}'.format(self.save_path, iter_))
 
     def test_update(self, batch_timesteps=10000, max_ep_len=500):
         assert len(self.env_fns) == 1, 'should test on one task at a time'
