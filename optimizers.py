@@ -10,44 +10,75 @@ class MILOptimizer:
         inner_learning_rate=1.0,
     ):
         self.expert_trajs = expert_trajs
-        self.optimizer = optimizer(learning_rate=learning_rate, epsilon=optimizer_epsilon)
+        self.tasks = sorted(self.expert_trajs.keys())
+        self.n_tasks = len(self.expert_trajs)
+        self.expert_obs = tf.stack([
+            tf.constant(self.expert_trajs[task]['obs'][:30*10], name='expert_obs', dtype=tf.float32)
+            for task in self.tasks
+        ])
+        self.expert_actions = tf.stack([
+            tf.constant(self.expert_trajs[task]['actions'][:30*10], name='expert_actions', dtype=tf.float32)
+            for task in self.tasks
+        ])
+
+        # get expert traj data for tasks in minibatch
+        self.meta_batch_size = meta_batch_size
+        self.mb_task_inds = tf.placeholder(tf.int32, self.meta_batch_size)
+        mb_expert_obs = tf.gather_nd(self.expert_obs, tf.expand_dims(self.mb_task_inds, axis=1))
+        mb_expert_actions = tf.gather_nd(self.expert_actions, tf.expand_dims(self.mb_task_inds, axis=1))
+
+        # collect parameters
+        self.policy = policy
+        self.params = self.policy.params
 
         self.returns = tf.placeholder(tf.float32, shape=[None, 1], name='returns')
         self.old_action_log_probs = tf.placeholder(tf.float32, shape=[None, 1], name='old_action_log_probs')
 
-        self.policy = policy
-        self.params = self.policy.params
-        self.obs = self.policy.obs
-        self.distribution = self.policy.distribution
-        self.actions = self.policy.actions
-        self.action_log_probs = self.policy.action_log_probs
-        self.baselines = self.policy.baselines
-        self.log_vars = self.policy.log_vars
+        # per-task dicts (for quantities needed for policy gradient)
+        per_task_action_log_probs = self._get_per_task_tensor(tf.expand_dims(self.policy.action_log_probs, axis=1))
+        per_task_old_action_log_probs = self._get_per_task_tensor(self.old_action_log_probs)
+        per_task_returns = self._get_per_task_tensor(self.returns)
+        per_task_baselines = self._get_per_task_tensor(self.policy.baselines)
 
-        # inner update: policy gradient surrogate loss + grads
-        self.action_prob_ratio = tf.exp(tf.expand_dims(self.action_log_probs, axis=1) - self.old_action_log_probs)
-        self.policy_loss = -self.action_prob_ratio * (self.returns - self.baselines)
-        self.clipped_policy_loss = -tf.clip_by_value(self.action_prob_ratio, 1-clip_param, 1+clip_param) \
-            * (self.returns - self.baselines)
-        self.surr_policy_loss = tf.reduce_mean(tf.maximum(self.policy_loss, self.clipped_policy_loss))
-        self.inner_loss = self.surr_policy_loss
-        self.inner_grads, self.zipped_inner_grads, self.postupdate_params = self.collect_grads(
-            self.params, self.inner_loss, max_grad_norm, inner_learning_rate, noupdate_keys=['conv_network'],
-        )
-        self.inner_update_op = tf.train.GradientDescentOptimizer(inner_learning_rate).apply_gradients(self.zipped_inner_grads)
+        # meta-learning
+        self.inner_update_ops = []
+        self.inner_losses = []
+        self.il_loss = tf.constant(0, dtype=tf.float32)
+        for task in range(self.meta_batch_size):
+            print('Creating computation graph for meta-batch task {}...'.format(task))
+            # inner update: policy gradient surrogate loss + grads
+            task_action_prob_ratio = tf.exp(per_task_action_log_probs[task] - per_task_old_action_log_probs[task])
+            task_policy_loss = -task_action_prob_ratio \
+                * (per_task_returns[task] - per_task_baselines[task])
+            task_clipped_policy_loss = -tf.clip_by_value(task_action_prob_ratio, 1-clip_param, 1+clip_param) \
+                * (per_task_returns[task] - per_task_baselines[task])
+            task_inner_loss = tf.reduce_mean(tf.maximum(task_policy_loss, task_clipped_policy_loss))
+            _, task_zipped_inner_grads, task_postupdate_params \
+                = self.collect_grads(
+                    self.params, task_inner_loss,
+                    max_grad_norm, inner_learning_rate,
+                    noupdate_keys=['conv_network']
+                )
+            task_inner_update_op \
+                = tf.train.GradientDescentOptimizer(inner_learning_rate).apply_gradients(task_zipped_inner_grads)
+            self.inner_losses.append(task_inner_loss)
+            self.inner_update_ops.append(task_inner_update_op)
 
-        # get postupdate policy dist
-        self.expert_obs = tf.placeholder(tf.float32, shape=[None, self.policy.ob_dim], name='expert_obs')
-        self.expert_actions = tf.placeholder(tf.float32, shape=[None, self.policy.action_dim], name='actions')
-        self.postupdate_means, self.postupdate_log_vars = self.policy.forward(self.expert_obs, params=self.postupdate_params)
-        self.postupdate_log_vars = tf.maximum(self.postupdate_log_vars, min_log_var)
-        self.postupdate_dist = self.policy.distribution_class(self.postupdate_means, self.postupdate_log_vars)
-        self.expert_action_log_probs = self.postupdate_dist.log_prob(self.expert_actions)
+            # get postupdate policy dist
+            task_postupdate_means, task_postupdate_log_vars = self.policy.forward(
+                mb_expert_obs[task],
+                params=task_postupdate_params
+            )
+            task_postupdate_log_vars = tf.maximum(task_postupdate_log_vars, min_log_var)
+            task_postupdate_dists = self.policy.distribution_class(task_postupdate_means, task_postupdate_log_vars)
+            task_expert_action_log_probs = task_postupdate_dists.log_prob(mb_expert_actions[task])
 
-        # meta-update: behavior cloning loss + gradients for the postupdate dist
-        self.il_loss = -tf.reduce_mean(self.expert_action_log_probs)
-        self.grads, self.zipped_grads, _ = self.collect_grads(self.params, self.il_loss)
-        self.train_op = self.optimizer.apply_gradients(self.zipped_grads)
+            # meta-update: behavior cloning loss
+            self.il_loss += (-tf.reduce_mean(task_expert_action_log_probs) / self.meta_batch_size)
+
+        # collect losses and grads across all tasks, and optimize
+        self.optimizer = optimizer(learning_rate=learning_rate, epsilon=optimizer_epsilon)
+        self.train_op = self.optimizer.minimize(self.il_loss)
 
     def train(self,
         obs, next_obs, actions, action_log_probs, returns,
@@ -90,7 +121,7 @@ class MILOptimizer:
         global_session,
     ):
         global_session.run(
-            self.inner_update_op,
+            self.inner_update_ops[0],
             feed_dict={
                 self.obs: obs,
                 self.actions: actions,
@@ -101,13 +132,15 @@ class MILOptimizer:
 
     def collect_grads(self, params, loss, max_grad_norm=0.1, learning_rate=0.1, noupdate_keys=['conv_network']):
         grads, zipped_grads, postupdate_params = {}, [], {}
-        for (k, v) in params.items():
+        for (k, v) in sorted(params.items()):
             if type(v) != dict: # is tf variable reference
                 grads[k], _ = tf.clip_by_global_norm(
                     tf.gradients(loss, params[k]),
                     max_grad_norm,
                 )
                 grads[k] = grads[k][0]
+                if grads[k] is None:
+                    grads[k] = tf.zeros_like(params[k])
                 if k in noupdate_keys:
                     grads[k] = tf.zeros_like(grads[k])
                 postupdate_params[k] = params[k] - learning_rate*grads[k]
@@ -116,6 +149,15 @@ class MILOptimizer:
                 grads[k], sub_zipped_grads, postupdate_params[k] = self.collect_grads(params[k], loss)
                 zipped_grads.extend(sub_zipped_grads)
         return grads, zipped_grads, postupdate_params
+
+    def _get_per_task_tensor(self, tensor):
+        if tensor.shape[0].value == 1:
+            return tf.tile(tensor, [self.n_tasks, 1])
+        per_task_tensor = tf.transpose(
+            tf.reshape(tensor, (-1, self.n_tasks, tensor.shape[1].value)),
+            [1, 0, 2],
+        )
+        return per_task_tensor
 
 class ClipPPO:
     def __init__(self,

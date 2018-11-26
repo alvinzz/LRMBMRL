@@ -2,8 +2,13 @@ from policies import GaussianMLPPolicy, ConvGaussianMLPPolicy
 import tensorflow as tf
 import numpy as np
 from rollouts import *
+<<<<<<< HEAD
 from optimizers import *
 from samplers import *
+=======
+from samplers import MetaParallelEnvExecutor
+from optimizers import MILOptimizer
+import time
 
 from distributions import DiagGaussian
 
@@ -25,9 +30,9 @@ class MetaRL:
             sample_env = self.env_fns[0]()
             self.ob_dim = sample_env.observation_space.shape[0]
             self.action_dim = sample_env.action_space.shape[0]
-            self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[64], learn_vars=True)
+            # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[64], learn_vars=True)
             # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[100, 100, 100], learn_vars=True)
-            # self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, learn_vars=True)
+            self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, learn_vars=True)
 
             self.optimizer = MILOptimizer(self.policy, self.expert_trajs)
 
@@ -50,18 +55,22 @@ class MetaRL:
             print('Iteration', iter_)
             if iter_ % inv_rollout_freq == 0:
                 # collect new, on-policy rollout
+                print('Collecting rollouts...')
+                start = time.time()
+                mb_task_inds = np.random.choice(np.arange(len(self.expert_trajs)), size=self.meta_batch_size, replace=False)
                 obs, next_obs, actions, action_log_probs, baselines, returns, rewards \
-                     = collect_and_process_rollouts(sampler, self.policy, self.sess, batch_timesteps)
-                obs, next_obs, actions, action_log_probs, baselines, returns, rewards = \
-                    obs.reshape(self.n_tasks, -1, self.ob_dim), next_obs.reshape(self.n_tasks, -1, self.ob_dim), actions.reshape(self.n_tasks, -1, self.action_dim), action_log_probs.reshape(self.n_tasks, -1, 1), baselines.reshape(self.n_tasks, -1, 1), returns.reshape(self.n_tasks, -1, 1), rewards.reshape(self.n_tasks, -1, 1)
-                obs, next_obs, actions, action_log_probs, baselines, returns, rewards = \
-                    {self.tasks[i]: v for (i, v) in enumerate(obs)}, {self.tasks[i]: v for (i, v) in enumerate(next_obs)}, {self.tasks[i]: v for (i, v) in enumerate(actions)}, {self.tasks[i]: v for (i, v) in enumerate(action_log_probs)}, {self.tasks[i]: v for (i, v) in enumerate(baselines)}, {self.tasks[i]: v for (i, v) in enumerate(returns)}, {self.tasks[i]: v for (i, v) in enumerate(rewards)}
+                     = collect_and_process_rollouts(sampler, self.policy, self.sess, batch_timesteps, mb_task_inds)
+                end = time.time()
+                print('    Done! ({}s)'.format(end-start))
             else:
                 # update action_log_probs and baselines to reflect updated policy
-                for task in self.env_fns.keys():
-                    action_log_probs[task], baselines[task], _ = self.policy.rollout_data(obs[task], actions[task], self.sess)
-                    action_log_probs[task], baselines[task] = action_log_probs[task].reshape(-1, 1), baselines[task].reshape(-1, 1)
-            self.optimizer.train(obs, next_obs, actions, action_log_probs, returns, self.sess)
+                action_log_probs, baselines, _ = self.policy.rollout_data(obs, actions, self.sess)
+                action_log_probs, baselines = action_log_probs.reshape(-1, 1), baselines.reshape(-1, 1)
+            print('Optimizing meta-policy...')
+            start = time.time()
+            self.optimizer.train(obs, next_obs, actions, action_log_probs, returns, mb_task_inds, self.sess)
+            end = time.time()
+            print('    Done! ({}s)'.format(end-start))
             if iter_ % inv_save_freq == 0:
                 self.saver.save(self.sess, '{}_{}'.format(self.save_path, iter_))
         self.saver.save(self.sess, '{}_{}'.format(self.save_path, iter_))
