@@ -59,7 +59,7 @@ class MetaParallelEnvExecutor(object):
         else:
             mb_remotes = self.remotes
         for remote, action in zip(mb_remotes, actions):
-            remote.send(('step', action))
+            remote.send(('step', [action]))
 
         results = [remote.recv() for remote in mb_remotes]
 

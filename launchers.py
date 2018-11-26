@@ -106,24 +106,23 @@ if __name__ == '__main__':
     #test_mil(expert_dir='data/r7dof', expert_name='vision_BC_test', envs=envs, timesteps_per_rollout=30, ep_max_len=30)
 
     ### VISUAL POINTMASS
-    #expert_trajs = pickle.load(open('data/r7dof/expert_trajs_xyz.pkl', 'rb'))
-    #envs = {k: R7DOFxyzEnv(k) for (k, v) in expert_trajs.items()}
-    #train_mil(
-    #    n_iters=500, save_dir='data/r7dof', name='xyz_vision_MIL',
-    #    envs=envs, expert_trajs=expert_trajs,
-    #    timesteps_per_rollout=600, ep_max_len=30,
-    #    use_checkpoint=False,
-    #)
-    #test_mil(
-    #    expert_dir='data/r7dof', expert_name='xyz_vision_MIL', checkpoint_iter=499,
-    #    envs=envs, timesteps_per_rollout=600, ep_max_len=30
-    #)
+    expert_trajs = pickle.load(open('data/r7dof/expert_trajs_xyz.pkl', 'rb'))
+    envs = {k: R7DOFxyzEnv(k) for (k, v) in expert_trajs.items()}
+    train_mil(
+        n_iters=500, save_dir='data/r7dof', name='xyz_vision_MIL',
+        envs=envs, expert_trajs=expert_trajs,
+        timesteps_per_rollout=600, ep_max_len=30,
+        use_checkpoint=False,
+    )
+    test_mil(
+        expert_dir='data/r7dof', expert_name='xyz_vision_MIL', checkpoint_iter=499,
+        envs=envs, timesteps_per_rollout=600, ep_max_len=30
+    )
 
     ### POINTMASS
     #train_expert_trajs = pickle.load(open('data/pointmass/train_expert_trajs.pkl', 'rb'))
     #train_envs = {k: PointMass(np.array(k)) for (k, v) in train_expert_trajs.items()}
     #train_mil(n_iters=100, save_dir='data/pointmass', name='MIL', envs=train_envs, expert_trajs=train_expert_trajs)
-
-    test_expert_trajs = pickle.load(open('data/pointmass/test_expert_trajs.pkl', 'rb'))
-    test_envs = {k: PointMass(np.array(k)) for (k, v) in test_expert_trajs.items()}
-    test_mil(expert_dir='data/pointmass', expert_name='MIL', checkpoint_iter=99, envs=test_envs, expert_trajs=test_expert_trajs)
+    #test_expert_trajs = pickle.load(open('data/pointmass/test_expert_trajs.pkl', 'rb'))
+    #test_envs = {k: PointMass(np.array(k)) for (k, v) in test_expert_trajs.items()}
+    #test_mil(expert_dir='data/pointmass', expert_name='MIL', checkpoint_iter=99, envs=test_envs, expert_trajs=test_expert_trajs)
