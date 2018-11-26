@@ -2,8 +2,8 @@ from policies import GaussianMLPPolicy, ConvGaussianMLPPolicy
 import tensorflow as tf
 import numpy as np
 from rollouts import *
-from samplers import MetaParallelEnvExecutor
-from optimizers import MILOptimizer
+from optimizers import *
+from samplers import *
 
 from distributions import DiagGaussian
 
@@ -12,7 +12,6 @@ class MetaRL:
         name,
         env_fn_dict,
         expert_trajs,
-        meta_batch_size=3,
         checkpoint=None,
         save_path='model',
     ):
@@ -21,7 +20,6 @@ class MetaRL:
             self.tasks = list(sorted(self.env_fn_dict.keys()))
             self.env_fns = [self.env_fn_dict[task] for task in self.tasks]
             self.n_tasks = len(self.tasks)
-            self.meta_batch_size = meta_batch_size
             self.expert_trajs = expert_trajs
 
             sample_env = self.env_fns[0]()
@@ -31,7 +29,7 @@ class MetaRL:
             # self.policy = GaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, hidden_dims=[100, 100, 100], learn_vars=True)
             # self.policy = ConvGaussianMLPPolicy('policy', self.expert_trajs, self.ob_dim, self.action_dim, learn_vars=True)
 
-            self.optimizer = MILOptimizer(self.policy, self.expert_trajs, self.meta_batch_size)
+            self.optimizer = MILOptimizer(self.policy, self.expert_trajs)
 
             self.saver = tf.train.Saver(max_to_keep=None)
             self.save_path = save_path
@@ -52,21 +50,24 @@ class MetaRL:
             print('Iteration', iter_)
             if iter_ % inv_rollout_freq == 0:
                 # collect new, on-policy rollout
-                mb_task_inds = np.random.choice(np.arange(len(self.expert_trajs)), size=self.meta_batch_size, replace=False)
                 obs, next_obs, actions, action_log_probs, baselines, returns, rewards \
-                     = collect_and_process_rollouts(sampler, self.policy, self.sess, batch_timesteps, mb_task_inds)
+                     = collect_and_process_rollouts(sampler, self.policy, self.sess, batch_timesteps)
+                obs, next_obs, actions, action_log_probs, baselines, returns, rewards = \
+                    obs.reshape(self.n_tasks, -1, self.ob_dim), next_obs.reshape(self.n_tasks, -1, self.ob_dim), actions.reshape(self.n_tasks, -1, self.action_dim), action_log_probs.reshape(self.n_tasks, -1, 1), baselines.reshape(self.n_tasks, -1, 1), returns.reshape(self.n_tasks, -1, 1), rewards.reshape(self.n_tasks, -1, 1)
+                obs, next_obs, actions, action_log_probs, baselines, returns, rewards = \
+                    {self.tasks[i]: v for (i, v) in enumerate(obs)}, {self.tasks[i]: v for (i, v) in enumerate(next_obs)}, {self.tasks[i]: v for (i, v) in enumerate(actions)}, {self.tasks[i]: v for (i, v) in enumerate(action_log_probs)}, {self.tasks[i]: v for (i, v) in enumerate(baselines)}, {self.tasks[i]: v for (i, v) in enumerate(returns)}, {self.tasks[i]: v for (i, v) in enumerate(rewards)}
             else:
                 # update action_log_probs and baselines to reflect updated policy
-                action_log_probs, baselines, _ = self.policy.rollout_data(obs, actions, self.sess)
-                action_log_probs, baselines = action_log_probs.reshape(-1, 1), baselines.reshape(-1, 1)
-            self.optimizer.train(obs, next_obs, actions, action_log_probs, returns, mb_task_inds, self.sess)
+                for task in self.env_fns.keys():
+                    action_log_probs[task], baselines[task], _ = self.policy.rollout_data(obs[task], actions[task], self.sess)
+                    action_log_probs[task], baselines[task] = action_log_probs[task].reshape(-1, 1), baselines[task].reshape(-1, 1)
+            self.optimizer.train(obs, next_obs, actions, action_log_probs, returns, self.sess)
             if iter_ % inv_save_freq == 0:
                 self.saver.save(self.sess, '{}_{}'.format(self.save_path, iter_))
         self.saver.save(self.sess, '{}_{}'.format(self.save_path, iter_))
 
     def test_update(self, batch_timesteps=10000, max_ep_len=500):
-        assert self.n_tasks == 1, 'should test on one task at a time'
-        assert self.meta_batch_size == 1, 'should test on one task at a time'
+        assert len(self.env_fns) == 1, 'should test on one task at a time'
         envs_per_task = int(np.ceil(batch_timesteps / max_ep_len))
         sampler = MetaParallelEnvExecutor(self.env_fns, envs_per_task, max_ep_len)
         obs, next_obs, actions, action_log_probs, baselines, returns, rewards \

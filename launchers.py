@@ -44,7 +44,7 @@ def test_mil(expert_dir, expert_name, checkpoint_iter,
         tf.reset_default_graph()
         env_fns = {task: lambda: env}
         expert_traj = {task: expert_trajs[task]}
-        expert_model = metarl_algo(expert_name, env_fns, expert_trajs=expert_traj, meta_batch_size=1, checkpoint='{}/{}_model_{}'.format(expert_dir, expert_name, checkpoint_iter))
+        expert_model = metarl_algo(expert_name, env_fns, expert_trajs=expert_traj, checkpoint='{}/{}_model_{}'.format(expert_dir, expert_name, checkpoint_iter))
         expert_model.test_update(timesteps_per_rollout, ep_max_len)
         task_env = env
         tot_reward = 0
@@ -123,7 +123,6 @@ if __name__ == '__main__':
     #train_expert_trajs = pickle.load(open('data/pointmass/train_expert_trajs.pkl', 'rb'))
     #train_envs = {k: PointMass(np.array(k)) for (k, v) in train_expert_trajs.items()}
     #train_mil(n_iters=100, save_dir='data/pointmass', name='MIL', envs=train_envs, expert_trajs=train_expert_trajs)
-
-    test_expert_trajs = pickle.load(open('data/pointmass/test_expert_trajs.pkl', 'rb'))
-    test_envs = {k: PointMass(np.array(k)) for (k, v) in test_expert_trajs.items()}
-    test_mil(expert_dir='data/pointmass', expert_name='MIL', checkpoint_iter=99, envs=test_envs, expert_trajs=test_expert_trajs)
+    #test_expert_trajs = pickle.load(open('data/pointmass/test_expert_trajs.pkl', 'rb'))
+    #test_envs = {k: PointMass(np.array(k)) for (k, v) in test_expert_trajs.items()}
+    #test_mil(expert_dir='data/pointmass', expert_name='MIL', checkpoint_iter=99, envs=test_envs, expert_trajs=test_expert_trajs)

@@ -50,6 +50,8 @@ def collect_and_process_rollouts(
 
     # get action_probs, baselines, entropies for all timesteps
     action_log_probs, baselines, entropies = policy.rollout_data(obs, actions, global_session)
+    if baselines.shape[0] != action_log_probs.shape[0]:
+        baselines = np.tile(baselines, [action_log_probs.shape[0], 1])
     action_log_probs, baselines, entropies = np.expand_dims(action_log_probs, axis=1), np.array(baselines), np.expand_dims(entropies, axis=1)
 
     # apply reward function

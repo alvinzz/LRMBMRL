@@ -166,6 +166,8 @@ class GaussianMLPPolicy:
         bias_init=tf.zeros_initializer,
     ):
         with tf.variable_scope(name):
+            self.ob_dim = ob_dim
+            self.action_dim = action_dim
             self.obs = tf.placeholder(tf.float32, shape=[None, ob_dim], name='obs')
 
             # policy net
