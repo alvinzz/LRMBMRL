@@ -33,11 +33,11 @@ class ConvGaussianMLPPolicy:
         conv_activation=swish,
         conv_out_activation=spatial_softmax,
         conv_weight_init=tf.contrib.layers.xavier_initializer,
-
-        optimizer=MILOptimizer,
     ):
         with tf.variable_scope(name):
             self.image_size = image_size
+            self.ob_dim = ob_dim
+            self.action_dim = action_dim
             self.obs = tf.placeholder(tf.float32, shape=[None, ob_dim], name='obs')
 
             # conv net
@@ -82,7 +82,6 @@ class ConvGaussianMLPPolicy:
 
             # collect parameters + optimize
             self.collect_params()
-            self.optimizer = optimizer(ob_dim, action_dim, self, expert_trajs)
 
     def act(self, obs, global_session):
         actions = global_session.run(
@@ -165,8 +164,6 @@ class GaussianMLPPolicy:
         out_activation=tf.identity,
         weight_init=tf.contrib.layers.xavier_initializer,
         bias_init=tf.zeros_initializer,
-
-        optimizer=MILOptimizer,
     ):
         with tf.variable_scope(name):
             self.obs = tf.placeholder(tf.float32, shape=[None, ob_dim], name='obs')
@@ -200,7 +197,6 @@ class GaussianMLPPolicy:
 
             # collect parameters + optimize
             self.collect_params()
-            self.optimizer = optimizer(ob_dim, action_dim, self, expert_trajs)
 
     def act(self, obs, global_session):
         actions = global_session.run(

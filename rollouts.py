@@ -1,19 +1,20 @@
 import numpy as np
 
 def collect_and_process_rollouts(
-    env_fn, policy, global_session,
-    n_timesteps=10000, max_ep_len=500,
+    sampler, policy, global_session,
+    n_timesteps=10000, mb_task_inds=None,
     discount=0.99, gae_lambda=0.95,
     entropy_weight=0.
 ):
-    # collect n_timesteps of data from n_envs rollouts in parallel
+    # collect n_timesteps of data from sampler.n_envs rollouts in parallel
     obs, next_obs, actions, env_rewards = [], [], [], []
     ep_lens = []
 
-    n_envs = int(np.ceil(n_timesteps / max_ep_len))
-    env_vec = [env_fn() for n in range(n_envs)]
+    if mb_task_inds is None:
+        mb_task_inds = np.arange(sampler.meta_batch_size)
+    n_envs = len(mb_task_inds) * sampler.envs_per_task
     env_timesteps = [0 for n in range(n_envs)]
-    obs_vec = [[env_vec[n].reset()] for n in range(n_envs)]
+    obs_vec = [[ob] for ob in sampler.reset([None]*n_envs, mb_task_inds)]
     next_obs_vec = [[] for n in range(n_envs)]
     actions_vec = [[] for n in range(n_envs)]
     env_rewards_vec = [[] for n in range(n_envs)]
@@ -21,26 +22,25 @@ def collect_and_process_rollouts(
     while len(obs) < n_timesteps:
         cur_obs = np.array([obs[-1] for obs in obs_vec])
         action_vec = policy.act(cur_obs, global_session)
+        ob, env_reward, done, info = sampler.step(action_vec, mb_task_inds)
         for n in range(n_envs):
-            action = action_vec[n]
-            # threshold actions
-            threshholded_action = np.clip(action, env_vec[n].action_space.low, env_vec[n].action_space.high)
-            ob, env_reward, done, info = env_vec[n].step(threshholded_action)
-            obs_vec[n].append(ob)
-            next_obs_vec[n].append(ob)
-            actions_vec[n].append(action)
-            env_rewards_vec[n].append([env_reward])
+            obs_vec[n].append(ob[n])
+            if 'next_obs' in info[n].keys():
+                next_obs_vec[n].append(info[n]['next_obs'])
+            else:
+                next_obs_vec[n].append(ob[n])
+            actions_vec[n].append(action_vec[n])
+            env_rewards_vec[n].append([env_reward[n]])
             env_timesteps[n] += 1
-            if done or env_timesteps[n] >= max_ep_len:
+            if done[n]:
                 # record data
-                obs_vec[n].pop()
-                ep_lens.append(len(obs_vec[n]))
-                obs.extend(obs_vec[n])
+                obs.extend(obs_vec[n][:-1])
                 next_obs.extend(next_obs_vec[n])
                 actions.extend(actions_vec[n])
                 env_rewards.extend(env_rewards_vec[n])
+                ep_lens.append(len(obs_vec[n]))
                 # reset env
-                obs_vec[n] = [env_vec[n].reset()]
+                obs_vec[n] = [obs_vec[n].pop()]
                 next_obs_vec[n] = []
                 actions_vec[n] = []
                 env_rewards_vec[n] = []

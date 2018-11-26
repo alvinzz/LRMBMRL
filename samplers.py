@@ -16,15 +16,19 @@ class MetaParallelEnvExecutor(object):
     """
 
     def __init__(self, env_fns, envs_per_task, max_path_length):
-        self.env_fns = env_fns
+        self.envs_per_task = envs_per_task
+        self.env_fns = []
+        for env_fn in env_fns:
+            for _ in range(envs_per_task):
+                self.env_fns.append(env_fn)
+
         self.meta_batch_size = len(env_fns)
         self.n_envs = self.meta_batch_size * envs_per_task
-        self.envs_per_task = envs_per_task
-        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(self.meta_batch_size)])
-        seeds = np.random.choice(range(10**6), size=self.meta_batch_size, replace=False)
+        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(self.n_envs)])
+        seeds = np.random.choice(range(10**6), size=self.n_envs, replace=False)
 
         self.ps = [
-            Process(target=worker, args=(work_remote, remote, env_fn, envs_per_task, max_path_length, seed))
+            Process(target=worker, args=(work_remote, remote, env_fn, 1, max_path_length, seed))
             for (work_remote, remote, env_fn, seed) in zip(self.work_remotes, self.remotes, self.env_fns, seeds)]  # Why pass work remotes?
 
         for p in self.ps:
@@ -33,7 +37,7 @@ class MetaParallelEnvExecutor(object):
         for remote in self.work_remotes:
             remote.close()
 
-    def step(self, actions):
+    def step(self, actions, mb_task_inds=None):
         """
         Executes actions on each env
         Args:
@@ -42,31 +46,42 @@ class MetaParallelEnvExecutor(object):
             (tuple): a length 4 tuple of lists, containing obs (np.array), rewards (float), dones (bool), env_infos (dict)
                       each list is of length meta_batch_size x envs_per_task (assumes that every task has same number of envs)
         """
-        assert len(actions) == self.num_envs
-
-        # split list of actions in list of list of actions per meta tasks
-        chunks = lambda l, n: [l[x: x + n] for x in range(0, len(l), n)]
-        actions_per_meta_task = chunks(actions, self.envs_per_task)
+        if mb_task_inds is None:
+            assert len(actions) == self.n_envs
+        else:
+            assert len(actions) == len(mb_task_inds) * self.envs_per_task
 
         # step remote environments
-        for remote, action_list in zip(self.remotes, actions_per_meta_task):
-            remote.send(('step', action_list))
+        if mb_task_inds is not None:
+            mb_remotes = []
+            for task_ind in mb_task_inds:
+                mb_remotes.extend(self.remotes[self.envs_per_task*task_ind:self.envs_per_task*(task_ind+1)])
+        else:
+            mb_remotes = self.remotes
+        for remote, action in zip(mb_remotes, actions):
+            remote.send(('step', action))
 
-        results = [remote.recv() for remote in self.remotes]
+        results = [remote.recv() for remote in mb_remotes]
 
         obs, rewards, dones, env_infos = map(lambda x: sum(x, []), zip(*results))
 
         return obs, rewards, dones, env_infos
 
-    def reset(self, tasks=None):
+    def reset(self, reset_args=None, mb_task_inds=None):
         """
         Resets the environments of each worker
         Returns:
             (list): list of (np.ndarray) with the new initial observations.
         """
-        for remote, task in zip(self.remotes, tasks):
-            remote.send(('reset', task))
-        return sum([remote.recv() for remote in self.remotes], [])
+        if mb_task_inds is not None:
+            mb_remotes = []
+            for task_ind in mb_task_inds:
+                mb_remotes.extend(self.remotes[self.envs_per_task*task_ind:self.envs_per_task*(task_ind+1)])
+        else:
+            mb_remotes = self.remotes
+        for remote, reset_arg in zip(mb_remotes, reset_args):
+            remote.send(('reset', reset_arg))
+        return sum([remote.recv() for remote in mb_remotes], [])
 
     @property
     def num_envs(self):
@@ -109,13 +124,17 @@ def worker(remote, parent_remote, env_fn, n_envs, max_path_length, seed):
             for i in range(n_envs):
                 if dones[i] or (ts[i] >= max_path_length):
                     dones[i] = True
+                    infos[i]['next_obs'] = obs[i].copy()
                     obs[i] = envs[i].reset()
                     ts[i] = 0
             remote.send((obs, rewards, dones, infos))
 
         # reset all the environments of the worker
         elif cmd == 'reset':
-            obs = [env.reset(data) for env in envs]
+            if data is None:
+                obs = [env.reset() for env in envs]
+            else:
+                obs = [env.reset(data) for env in envs]
             ts[:] = 0
             remote.send(obs)
 
